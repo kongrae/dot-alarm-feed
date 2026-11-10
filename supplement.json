@@ -1,0 +1,9 @@
+{
+  "sourceURLs": ["https://www.kasa.go.kr/prog/plcyBrf/brief/kor/sub01_01_04/view.do?plcyBrfNo=431"],
+  "holidays": [
+    { "date": "2026-05-01", "name": "노동절" },
+    { "date": "2026-07-17", "name": "제헌절" },
+    { "date": "2027-05-01", "name": "노동절" },
+    { "date": "2027-07-17", "name": "제헌절" }
+  ]
+}

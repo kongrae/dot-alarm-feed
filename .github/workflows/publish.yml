@@ -1,0 +1,46 @@
+name: Publish Korean holidays
+# Every morning (06:15 in Korea), and whenever supplement.json changes: collect this year and next from the KASI API,
+# keep earlier years, add announced holidays the API may still lack, validate, and publish holidays-kr.json through
+# GitHub Pages only when the holidays themselves changed. A failed collection leaves the published file as it was.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 21 * * *'
+  push:
+    branches: [main]
+    paths: [supplement.json]
+permissions:
+  contents: write
+concurrency:
+  group: publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect and validate
+        env:
+          KASI_SERVICE_KEY: ${{ secrets.KASI_SERVICE_KEY }}
+        run: |
+          CURRENT_YEAR=$(TZ=Asia/Seoul date +%Y)
+          python collect.py --years "$CURRENT_YEAR" "$((CURRENT_YEAR + 1))" --supplement supplement.json --output holidays-kr.json
+      - name: Publish when the holidays changed
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          new = json.load(open('holidays-kr.json', encoding='utf-8'))
+          old = json.loads(subprocess.check_output(['git', 'show', 'HEAD:holidays-kr.json']))
+          if (old['years'], old['holidays']) == (new['years'], new['holidays']):
+              subprocess.check_call(['git', 'checkout', '--', 'holidays-kr.json'])
+              print('No holiday changes; nothing to publish')
+          PY
+          if git diff --quiet -- holidays-kr.json; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add holidays-kr.json
+          git commit -m "공휴일 갱신 $(TZ=Asia/Seoul date +%F)"
+          git push

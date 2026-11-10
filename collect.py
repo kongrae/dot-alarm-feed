@@ -1,8 +1,29 @@
 #!/usr/bin/env python3
 """Collect KASI named public holidays. Keep service credentials out of output/errors."""
-import argparse, datetime as dt, json, os, pathlib, tempfile, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+import argparse, datetime as dt, json, os, pathlib, re, tempfile, urllib.parse, urllib.request, xml.etree.ElementTree as ET
 ENDPOINT='https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo'
 ANCHORS=('01-01','03-01','05-05','06-06','08-15','10-03','10-09','12-25')
+EVERYDAY_NAMES={'1월1일':'신정','기독탄신일':'성탄절'}
+LUNAR=('설날','추석')
+
+def friendly(name):
+    """The name people say, not the legal one: 신정, 성탄절, and '삼일절 대체공휴일' for KASI's '대체공휴일(삼일절)'."""
+    m=re.fullmatch(r'대체공휴일\s*\((.+)\)',name)
+    if m: return friendly(m.group(1).strip())+' 대체공휴일'
+    return EVERYDAY_NAMES.get(name,name)
+
+def mark_lunar_eves(rows):
+    """KASI calls all three days of 설날/추석 by the same name. The middle one is the day itself; the days on either
+    side become '설날 연휴'/'추석 연휴'. Only a run of exactly three days is touched."""
+    for name in LUNAR:
+        days=sorted(d for d,names in rows.items() if name in names)
+        runs=[]
+        for d in days:
+            if runs and dt.date.fromisoformat(d)-dt.date.fromisoformat(runs[-1][-1])==dt.timedelta(days=1): runs[-1].append(d)
+            else: runs.append([d])
+        for run in runs:
+            if len(run)!=3: continue
+            for d in (run[0],run[2]): rows[d]=(rows[d]-{name})|{name+' 연휴'}
 
 def parse_year(xml, year):
     root=ET.fromstring(xml)
@@ -17,7 +38,8 @@ def parse_year(xml, year):
         raw=item.findtext('locdate','')
         date=dt.datetime.strptime(raw,'%Y%m%d').date()
         if date.year != year or not name or len(name)>100: raise ValueError('Invalid API holiday')
-        rows.setdefault(date.isoformat(),set()).add(name)
+        rows.setdefault(date.isoformat(),set()).add(friendly(name))
+    mark_lunar_eves(rows)
     return [dict(date=d,name=' · '.join(sorted(names))) for d,names in sorted(rows.items())]
 
 def require(value):

@@ -44,3 +44,15 @@ jobs:
           git add holidays-kr.json
           git commit -m "공휴일 갱신 $(TZ=Asia/Seoul date +%F)"
           git push
+      # GitHub turns off a public repository's schedule after 60 days without a commit, and the holidays seldom
+      # change. When the last commit is over 30 days old, leave the date of this check so the schedule keeps running.
+      - name: Keep the schedule running
+        run: |
+          git pull --ff-only --quiet
+          if [ $(( $(date +%s) - $(git log -1 --format=%ct) )) -lt $(( 30 * 86400 )) ]; then exit 0; fi
+          TZ=Asia/Seoul date +%F > last-check.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add last-check.txt
+          git commit -m "확인 $(TZ=Asia/Seoul date +%F)"
+          git push
